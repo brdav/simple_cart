@@ -120,7 +120,6 @@ class AdaBoost:
             w = w * np.exp(alpha_m * (y_hat != y))
             self.clfs.append(clf_m)
             self.alphas.append(alpha_m)
-
         return self
 
     def predict(self, X):

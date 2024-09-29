@@ -47,8 +47,8 @@ class TreeNode:
 
         Returns
         -------
-        ret : int or TreeNode
-            node value if a leaf node, otherwise a child node
+        ret : float or int
+            decision value for current branch
         """
         if self.left is None and self.right is None:
             return self.value
@@ -269,6 +269,10 @@ class DecisionTree:
             current tree node
         N : int
             total number of observations
+        weakest_links : list
+            weakest links before traversing this node
+        alpha_eff : float
+            alpha_eff of weakest links before traversing this node
 
         Returns
         -------
@@ -343,7 +347,7 @@ class DecisionTree:
 
         Returns
         -------
-        val : float
+        val : float or int
             node value
         """
         if self.assign_leaf_node == "most_common":
