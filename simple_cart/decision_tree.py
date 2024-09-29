@@ -226,28 +226,17 @@ class DecisionTree:
         Minimal cost-complexity pruning, implemented
         through iterative weakest-link pruning. For
         a description of the algorithm see
-
-        Breiman, L. "Classification and regression trees." Routledge, 2017
+        >> Breiman, L. "Classification and regression trees." Routledge, 2017
 
         Parameters
         ----------
-        node : TreeNode
-            current tree node
         N : int
             total number of observations
-
-        Returns
-        -------
-        impurity : float
-            the impurity of the current subtree
-        T : int
-            the number of leaf nodes of current subtree
         """
         while True:
             weakest_links, alpha_eff, _, _ = self._find_weakest_links(
                 self.root, N, [], float("inf")
             )
-
             if alpha_eff <= self.ccp_alpha:
                 for node in weakest_links:
                     # prune the weakest link
@@ -255,7 +244,6 @@ class DecisionTree:
                     node.right = None
                     node.col_idx = None
                     node.threshold = None
-
             else:
                 break
 
