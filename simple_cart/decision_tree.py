@@ -317,10 +317,7 @@ class DecisionTree:
         y_hat : (N,) np.ndarray
             predictions
         """
-        y_hat = []
-        for x in X:
-            y_hat.append(self.root.decide(x))
-        return np.asarray(y_hat)
+        return np.array([self.root.decide(x) for x in X])
 
     def node_value(self, y, w):
         """
