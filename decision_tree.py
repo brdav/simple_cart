@@ -70,7 +70,6 @@ class DecisionTree:
         max_depth=float("inf"),
         min_samples_split=2,
         ccp_alpha=0.0,
-        max_features="none",
     ):
         """
         Initialize the decision tree.
@@ -87,9 +86,6 @@ class DecisionTree:
             minimum number of samples required to split
         ccp_alpha : float
             regularization parameter for pruning
-        max_features : str
-            "none" or "sqrt", maximum number of features to
-            consider at each split
         """
         self.root = None
         self.criterion = getattr(self, criterion)
@@ -97,9 +93,8 @@ class DecisionTree:
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.ccp_alpha = ccp_alpha
-        self.max_features = max_features
 
-    def fit(self, X, y, w=None):
+    def fit(self, X, y):
         """
         Fit the decision tree to data. First grow the tree
         and optionally prune it.
@@ -110,22 +105,18 @@ class DecisionTree:
             observations
         y : (N,) np.ndarray
             class labels
-        w : (N,) np.ndarray, optional
-            weigh samples in criterion
 
         Returns
         -------
         model : DecisionTree
             fitted decision tree
         """
-        if w is None:
-            w = np.ones(X.shape[0])
-        self.root = self._grow_tree(X, y, w)
+        self.root = self._grow_tree(X, y)
         if self.ccp_alpha > 0:
-            self._minimal_cost_complexity_pruning(sum(w))
+            self._minimal_cost_complexity_pruning(len(y))
         return self
 
-    def _grow_tree(self, X, y, w, depth=0):
+    def _grow_tree(self, X, y, depth=0):
         """
         Depth-first strategy to build tree greedily.
 
@@ -135,8 +126,6 @@ class DecisionTree:
             observations
         y : (N,) np.ndarray
             class labels
-        w : (N,) np.ndarray
-            weigh samples in criterion
         depth : int
             current tree depth
 
@@ -149,7 +138,7 @@ class DecisionTree:
         best_column_index = None
         best_column_threshold = None
 
-        impurity_base = self.criterion(y, w)
+        impurity_base = self.criterion(y)
 
         if (
             (len(y) < self.min_samples_split)
@@ -161,33 +150,25 @@ class DecisionTree:
                 None,
                 None,
                 None,
-                self.node_value(y, w),
+                self.node_value(y),
                 impurity_base,
-                sum(w),
+                len(y),
             )
         else:  # build tree recursively
-            if self.max_features == "sqrt":
-                select_cols = np.random.choice(
-                    np.arange(X.shape[1]), int(np.sqrt(X.shape[1])), replace=False
-                )
-            else:
-                select_cols = np.arange(X.shape[1])
-            for column_i in select_cols:
+            for column_i in np.arange(X.shape[1]):
                 split_vals = (
                     np.unique(X[:, column_i])[:-1] + np.unique(X[:, column_i])[1:]
                 ) / 2
                 for split_val in split_vals:
                     y_left = y[X[:, column_i] < split_val]
-                    w_left = w[X[:, column_i] < split_val]
                     y_right = y[X[:, column_i] >= split_val]
-                    w_right = w[X[:, column_i] >= split_val]
                     # getting the left and right losses
-                    impurity_left = self.criterion(y_left, w_left)
-                    impurity_right = self.criterion(y_right, w_right)
+                    impurity_left = self.criterion(y_left)
+                    impurity_right = self.criterion(y_right)
                     # calculating the weights for each of the nodes
                     impurity_split = (
-                        sum(w_left) * impurity_left + sum(w_right) * impurity_right
-                    ) / sum(w)
+                        len(y_left) * impurity_left + len(y_right) * impurity_right
+                    ) / len(y)
                     column_i_gain = impurity_base - impurity_split
                     if column_i_gain > best_gain:
                         best_gain = column_i_gain
@@ -197,28 +178,26 @@ class DecisionTree:
             if best_gain <= 0:
                 # stop recursion when there is no more gain
                 return TreeNode(
-                    None, None, None, None, self.node_value(y, w), impurity_base, sum(w)
+                    None, None, None, None, self.node_value(y), impurity_base, len(y)
                 )
 
             # divide dataset and continue recursion
             X_left = X[X[:, best_column_index] < best_column_threshold]
             y_left = y[X[:, best_column_index] < best_column_threshold]
-            w_left = w[X[:, best_column_index] < best_column_threshold]
             X_right = X[X[:, best_column_index] >= best_column_threshold]
             y_right = y[X[:, best_column_index] >= best_column_threshold]
-            w_right = w[X[:, best_column_index] >= best_column_threshold]
 
-            left_tree = self._grow_tree(X_left, y_left, w_left, depth=depth + 1)
-            right_tree = self._grow_tree(X_right, y_right, w_right, depth=depth + 1)
+            left_tree = self._grow_tree(X_left, y_left, depth=depth + 1)
+            right_tree = self._grow_tree(X_right, y_right, depth=depth + 1)
 
             return TreeNode(
                 left_tree,
                 right_tree,
                 best_column_index,
                 best_column_threshold,
-                self.node_value(y, w),
+                self.node_value(y),
                 impurity_base,
-                sum(w),
+                len(y),
             )
 
     def _minimal_cost_complexity_pruning(self, N):
@@ -319,7 +298,7 @@ class DecisionTree:
         """
         return np.array([self.root.decide(x) for x in X])
 
-    def node_value(self, y, w):
+    def node_value(self, y):
         """
         Return the node value.
 
@@ -327,8 +306,6 @@ class DecisionTree:
         ----------
         y : (N,) np.ndarray
             targets
-        w : (N,) np.ndarray
-            sample weight
 
         Returns
         -------
@@ -336,15 +313,14 @@ class DecisionTree:
             node value
         """
         if self.assign_leaf_node == "most_common":
-            unique_classes = np.unique(y)
-            w_count = [sum(w[y == k]) for k in unique_classes]
-            return unique_classes[np.argmax(w_count)]
+            values, counts = np.unique(y, return_counts=True)
+            return values[np.argmax(counts)]
         elif self.assign_leaf_node == "mean":
-            return np.average(y, weights=w)
+            return np.mean(y)
         else:
             raise ValueError
 
-    def gini(self, y, w):
+    def gini(self, y):
         """
         Compute Gini index for a vector of class labels.
 
@@ -352,8 +328,6 @@ class DecisionTree:
         ----------
         y : (N,) np.ndarray
             class labels
-        w : (N,) np.ndarray
-            sample weight
 
         Returns
         -------
@@ -365,11 +339,11 @@ class DecisionTree:
 
         Q_tau = 1
         for k in np.unique(y):
-            p_tauk = sum(w[y == k]) / sum(w)
+            p_tauk = np.mean(y == k)
             Q_tau -= p_tauk**2
         return Q_tau
 
-    def entropy(self, y, w):
+    def entropy(self, y):
         """
         Compute entropy for a vector of class labels.
 
@@ -377,8 +351,6 @@ class DecisionTree:
         ----------
         y : (N,) np.ndarray
             class labels
-        w : (N,) np.ndarray
-            sample weight
 
         Returns
         -------
@@ -390,43 +362,18 @@ class DecisionTree:
 
         Q_tau = 0
         for k in np.unique(y):
-            p_tauk = sum(w[y == k]) / sum(w)
+            p_tauk = np.mean(y == k)
             Q_tau -= p_tauk * np.log(p_tauk)
         return Q_tau
 
-    def misclassification_rate(self, y, w):
+    def squared_error(self, y):
         """
-        Compute misclassification rate for a vector of class
-        labels.
-
-        Parameters
-        ----------
-        y : (N,) np.ndarray
-            class labels
-        w : (N,) np.ndarray
-            sample weight
-
-        Returns
-        -------
-        Q : float
-            misclassification rate
-        """
-        if len(y) == 0:
-            return 0.0
-
-        w_prob = [sum(w[y == k]) / sum(w) for k in np.unique(y)]
-        return sum(sorted(w_prob)[:-1])
-
-    def squared_error(self, y, w):
-        """
-        Compute the squared error.
+        Compute the mean squared error.
 
         Parameters
         ----------
         y : (N,) np.ndarray
             targets
-        w : (N,) np.ndarray
-            sample weight
 
         Returns
         -------
@@ -436,7 +383,7 @@ class DecisionTree:
         if len(y) == 0:
             return 0.0
 
-        return np.average((y - np.average(y, weights=w)) ** 2, weights=w)
+        return np.mean((y - np.mean(y)) ** 2)
 
     def print_tree(self):
         """
